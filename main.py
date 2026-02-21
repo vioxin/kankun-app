@@ -14,5 +14,5 @@ async def on_message(message):
     if message.content == 'こんにちは':
         await message.channel.send('こんにちは！')
 keep_alive()
-token = os.environ['DISCORD_TOKEN']
+token = os.getenv['DISCORD_TOKEN']
 client.run(token)
