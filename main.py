@@ -21,7 +21,7 @@ async def on_message(message):
     if message.author == client.user:
         return
     if message.contest == 'こんにちは':
-        awite message.channel.send('こんにちは。ぼくのなまえはかんくん。このサーバーの管理代理人だよ！今はまだ信頼がないからみんなのコインの数とスロットシステムの管理をしているんだ。!coinと入力したら自分のコインの数がわかるし、!slotって入力したら10コインでスロットを回せるよ！これからもよろしくね！')
+        await message.channel.send('こんにちは。ぼくのなまえはかんくん。このサーバーの管理代理人だよ！今はまだ信頼がないからみんなのコインの数とスロットシステムの管理をしているんだ。!coinと入力したら自分のコインの数がわかるし、!slotって入力したら10コインでスロットを回せるよ！これからもよろしくね！')
     # 発言した人のIDを取得（これで誰のお財布か見分けます）
     user_id = message.author.id
 
