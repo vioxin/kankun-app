@@ -84,5 +84,5 @@ async def on_message(message):
 
 # 起動処理
 keep_alive()
-token = os.getenv['DISCORD_TOKEN'] # もしくは os.getenv('DISCORD_TOKEN')
+token = os.getene('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOKEN')
 client.run(token)
