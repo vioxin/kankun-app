@@ -149,5 +149,5 @@ async def advice(interaction: discord.Interaction):
 
 
 keep_alive()
-token = os.getenv('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOKEN')
-client.run(token)
+token = os.getenv('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOK
+bot.run(token)
