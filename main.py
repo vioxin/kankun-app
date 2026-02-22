@@ -157,10 +157,10 @@ async def poke(interaction: discord.Interaction):
 @bot.tree.command(name="advice", description="ランダムなありがたい言葉（英語）を授けます")
 async def advice(interaction: discord.Interaction):
     await interaction.response.defer()
+    headers = {"User-Agent": "Mozilla/5.0"} # 一般のブラウザのフリをする
     try:
         async with aiohttp.ClientSession() as session:
-            # timeout=5 を追加
-            async with session.get('https://api.adviceslip.com/advice', timeout=5) as resp:
+            async with session.get('https://api.adviceslip.com/advice', headers=headers, timeout=5) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     advice_text = data['slip']['advice']
@@ -170,7 +170,6 @@ async def advice(interaction: discord.Interaction):
     except Exception as e:
         print(f"Adviceエラー: {e}")
         await interaction.followup.send("💬 言葉を思い出すのに失敗しました！もう一度試してね。")
-
 # ==========================================
 # 🚀 さらに遊べる追加API機能
 # ==========================================
@@ -201,15 +200,15 @@ async def fake(interaction: discord.Interaction):
 @bot.tree.command(name="btc", description="現在のビットコイン価格（日本円）を調べます")
 async def btc(interaction: discord.Interaction):
     await interaction.response.defer()
+    headers = {"User-Agent": "MyDiscordBot/1.0"}
     try:
         async with aiohttp.ClientSession() as session:
-            # timeout=5 を追加して、5秒返事がなければエラーにする
-            async with session.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCJPY', timeout=5) as resp:
+            # 制限が緩いCoinGeckoのAPIに変更
+            url = 'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=jpy'
+            async with session.get(url, headers=headers, timeout=5) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    # 小数点以下を切り捨てて見やすくする
-                    price = int(float(data['price']))
-                    # 3桁ごとにカンマを入れる
+                    price = data['bitcoin']['jpy']
                     formatted_price = f"{price:,}"
                     await interaction.followup.send(f"📈 **現在のビットコイン価格:**\n1 BTC = **{formatted_price} 円** です！")
                 else:
@@ -263,41 +262,302 @@ async def ai_chat(interaction: discord.Interaction, prompt: str):
 # ==========================================
 # 🔍 インターネット検索機能
 # ==========================================
-
-@bot.tree.command(name="search", description="インターネットでキーワード検索をします")
+@bot.tree.command(name="search", description="Wikipediaでキーワードを検索します")
 @app_commands.describe(query="検索したいキーワード")
 async def search(interaction: discord.Interaction, query: str):
-    await interaction.response.defer() # 検索には少し時間がかかるので「考え中...」にする
+    await interaction.response.defer()
     
-    # 検索処理は少し重いので、ボットがフリーズしないように別の裏作業（スレッド）として実行します
-    def do_search(q):
-        with DDGS() as ddgs:
-            # max_results=3 で、上位3件のサイトを取得
-            return list(ddgs.text(q, region='wt-wt', safesearch='moderate', max_results=3))
-
+    # Wikipediaの検索APIを使用
+    url = f"https://ja.wikipedia.org/w/api.php?action=opensearch&search={urllib.parse.quote(query)}&limit=3&format=json"
+    # 「私は怪しいロボットじゃありません」という身分証
+    headers = {"User-Agent": "MyDiscordBot/1.0"}
+    
     try:
-        # 裏作業として検索を実行
-        results = await asyncio.to_thread(do_search, query)
-        
-        if not results:
-            await interaction.followup.send(f"「{query}」に関する情報は見つかりませんでした💦")
-            return
-
-        # 検索結果をかっこいいパネル（Embed）にまとめる
-        embed = discord.Embed(title=f"🔍 「{query}」の検索結果", color=0x3498db)
-        
-        for res in results:
-            # res['title'] がサイト名、res['body'] が説明文、res['href'] がURLです
-            embed.add_field(
-                name=res['title'], 
-                value=f"{res['body']}\n[🔗リンクはこちら]({res['href']})", 
-                inline=False
-            )
-            
-        await interaction.followup.send(embed=embed)
-        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    titles = data[1] # 見つかった記事のタイトル一覧
+                    links = data[3]  # 記事のURL一覧
+                    
+                    if not titles:
+                        await interaction.followup.send(f"「{query}」に関する情報は見つかりませんでした💦")
+                        return
+                        
+                    embed = discord.Embed(title=f"🔍 「{query}」の検索結果", color=0x3498db)
+                    for i in range(len(titles)):
+                        embed.add_field(name=titles[i], value=f"[🔗記事を読む]({links[i]})", inline=False)
+                        
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("検索サーバーが混雑しているみたいです...")
     except Exception as e:
+        print(f"Searchエラー: {e}")
         await interaction.followup.send("検索中にエラーが起きちゃいました...もう一度試してね！")
+# ==========================================
+# 🎵 エンタメ＆便利API機能
+# ==========================================
+
+@bot.tree.command(name="music", description="iTunesで曲を検索してジャケットと試聴リンクを表示します")
+@app_commands.describe(query="曲名やアーティスト名")
+async def music(interaction: discord.Interaction, query: str):
+    await interaction.response.defer()
+    
+    # Apple(iTunes)の検索API（日本のストアを指定）
+    url = f"https://itunes.apple.com/search?term={urllib.parse.quote(query)}&country=jp&media=music&limit=1"
+    headers = {"User-Agent": "MyDiscordBot/1.0"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    if data['resultCount'] == 0:
+                        await interaction.followup.send(f"🎧 「{query}」は見つからなかったよ...")
+                        return
+                        
+                    # 最初の1件のデータを取り出す
+                    track = data['results'][0]
+                    artist_name = track.get('artistName', '不明なアーティスト')
+                    track_name = track.get('trackName', '不明な曲')
+                    # 画質を良くするため、URLの 100x100 を 300x300 に書き換える小技
+                    artwork_url = track.get('artworkUrl100', '').replace('100x100bb', '300x300bb')
+                    preview_url = track.get('previewUrl', '')
+                    
+                    embed = discord.Embed(title=f"🎵 {track_name}", description=f"アーティスト: **{artist_name}**", color=0xff2d55)
+                    embed.set_thumbnail(url=artwork_url)
+                    if preview_url:
+                        embed.add_field(name="試聴", value=f"[▶️ 30秒試聴する（ブラウザが開きます）]({preview_url})")
+                        
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("🎧 Appleのサーバーに繋がらなかったみたい！")
+    except Exception as e:
+        print(f"Musicエラー: {e}")
+        await interaction.followup.send("🎧 検索中にエラーが起きちゃいました！")
+
+@bot.tree.command(name="qr", description="URLや文字からQRコードを作成します")
+@app_commands.describe(text="QRコードにしたい文字やURL")
+async def qr(interaction: discord.Interaction, text: str):
+    await interaction.response.defer()
+    
+    # 入力された文字をURL用に変換
+    safe_text = urllib.parse.quote(text)
+    # QRコード生成APIのURL（URL自体が画像になります）
+    qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=250x250&data={safe_text}"
+    
+    embed = discord.Embed(title="📱 QRコードを作成しました！", color=0xffffff)
+    embed.set_image(url=qr_url)
+    embed.set_footer(text=f"内容: {text}")
+    
+    await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="nasa", description="NASAが公開している「今日の宇宙画像」を表示します")
+async def nasa(interaction: discord.Interaction):
+    await interaction.response.defer()
+    
+    # NASA公式API（DEMO_KEYで無料で使えます）
+    url = "https://api.nasa.gov/planetary/apod?api_key=DEMO_KEY"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    title = data.get('title', '無題')
+                    image_url = data.get('url', '')
+                    
+                    embed = discord.Embed(title=f"🌌 {title}", color=0x0b3d91)
+                    embed.set_image(url=image_url)
+                    embed.set_footer(text="Provided by NASA API")
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("🌌 NASAの通信基地からの応答がありません！")
+    except Exception as e:
+        print(f"NASAエラー: {e}")
+        await interaction.followup.send("🌌 宇宙の彼方と通信中にエラーが発生しました。")
+# ==========================================
+# 🌐 外部サービス連携機能（翻訳・マイクラ・実用ツール）
+# ==========================================
+
+@bot.tree.command(name="translate", description="外国語を日本語に自動翻訳します")
+@app_commands.describe(text="翻訳したい文章")
+async def translate(interaction: discord.Interaction, text: str):
+    await interaction.response.defer()
+    
+    # MyMemory API: Autodetect(自動判定) から ja(日本語) へ翻訳
+    url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(text)}&langpair=Autodetect|ja"
+    headers = {"User-Agent": "MyDiscordBot/1.0"}
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    translated_text = data['responseData']['translatedText']
+                    
+                    embed = discord.Embed(title="🌐 翻訳結果", color=0x4285F4)
+                    embed.add_field(name="元の文章", value=text, inline=False)
+                    embed.add_field(name="日本語", value=translated_text, inline=False)
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("🌐 翻訳サーバーが少し混み合っているみたいです！")
+    except Exception as e:
+        print(f"Translateエラー: {e}")
+        await interaction.followup.send("🌐 翻訳中にエラーが発生しました💦")
+
+@bot.tree.command(name="mc", description="マイクラサーバーの現在の状態（人数など）を調べます")
+@app_commands.describe(address="サーバーアドレス (例: mc.hypixel.net)")
+async def mc(interaction: discord.Interaction, address: str):
+    await interaction.response.defer()
+    
+    # Minecraft Server Status API (Java版)
+    url = f"https://api.mcsrvstat.us/2/{urllib.parse.quote(address)}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    # サーバーがオンラインかどうかチェック
+                    if data.get('online'):
+                        players_online = data['players']['online']
+                        players_max = data['players']['max']
+                        version = data.get('version', '不明')
+                        
+                        embed = discord.Embed(title=f"⛏️ {address} の状態", color=0x2ecc71)
+                        embed.add_field(name="ステータス", value="🟢 オンライン", inline=True)
+                        embed.add_field(name="プレイヤー数", value=f"{players_online} / {players_max} 人", inline=True)
+                        embed.add_field(name="バージョン", value=version, inline=True)
+                    else:
+                        embed = discord.Embed(title=f"⛏️ {address} の状態", color=0xe74c3c)
+                        embed.add_field(name="ステータス", value="🔴 オフライン（または存在しません）", inline=False)
+                        
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("⛏️ APIサーバーに応答がありませんでした。")
+    except Exception as e:
+        print(f"MCエラー: {e}")
+        await interaction.followup.send("⛏️ サーバー情報の取得に失敗しました。")
+
+@bot.tree.command(name="zip", description="郵便番号から日本の住所を検索します")
+@app_commands.describe(zipcode="ハイフンなしの7桁の数字（例: 1000001）")
+async def zipcode(interaction: discord.Interaction, zipcode: str):
+    await interaction.response.defer()
+    
+    # 郵便番号検索API (ZipCloud)
+    url = f"https://zipcloud.ibsnet.co.jp/api/search?zipcode={urllib.parse.quote(zipcode)}"
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    
+                    # エラーメッセージがないか、結果が存在するかチェック
+                    if data['status'] == 200 and data['results']:
+                        result = data['results'][0]
+                        address = f"{result['address1']}{result['address2']}{result['address3']}"
+                        kana = f"{result['kana1']} {result['kana2']} {result['kana3']}"
+                        
+                        embed = discord.Embed(title="📮 住所検索結果", color=0xf39c12)
+                        embed.add_field(name="郵便番号", value=f"〒{zipcode}", inline=False)
+                        embed.add_field(name="住所", value=address, inline=False)
+                        embed.add_field(name="フリガナ", value=kana, inline=False)
+                        
+                        await interaction.followup.send(embed=embed)
+                    else:
+                        await interaction.followup.send(f"📮 「{zipcode}」の住所は見つかりませんでした！数字が間違っていないか確認してね。")
+                else:
+                    await interaction.followup.send("📮 検索サーバーがお休みのようです。")
+    except Exception as e:
+        print(f"Zipエラー: {e}")
+        await interaction.followup.send("📮 住所の検索中にエラーが発生しました。")
+# ==========================================
+# 🤪 おふざけ＆ネタ機能
+# ==========================================
+
+@bot.tree.command(name="yesno", description="AIがあなたの悩みに「Yes」か「No」で白黒つけます")
+@app_commands.describe(question="迷っていること（例: ガチャ引くべき？）")
+async def yesno(interaction: discord.Interaction, question: str):
+    await interaction.response.defer()
+    try:
+        async with aiohttp.ClientSession() as session:
+            # YES/NOとGIF画像を返してくれるAPI
+            async with session.get('https://yesno.wtf/api', timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    answer = data['answer'].upper() # yesをYESに大文字化
+                    gif_url = data['image']
+                    
+                    embed = discord.Embed(title=f"🤔 質問: {question}", color=0x9b59b6)
+                    embed.add_field(name="お告げ", value=f"**{answer}!!!**", inline=False)
+                    embed.set_image(url=gif_url)
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("🤔 宇宙の意志が読み取れませんでした...")
+    except Exception as e:
+        print(f"YesNoエラー: {e}")
+        await interaction.followup.send("🤔 占い中に水晶玉が割れました！")
+
+@bot.tree.command(name="duck", description="なぜかアヒルの画像を召喚します")
+async def duck(interaction: discord.Interaction):
+    await interaction.response.defer()
+    try:
+        async with aiohttp.ClientSession() as session:
+            # アヒル専用API
+            async with session.get('https://random-d.uk/api/v2/random', timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    image_url = data['url']
+                    
+                    embed = discord.Embed(title="🦆 クワッ！", color=0xf1c40f)
+                    embed.set_image(url=image_url)
+                    
+                    await interaction.followup.send(embed=embed)
+                else:
+                    await interaction.followup.send("🦆 アヒルは池に帰りました。")
+    except Exception as e:
+        print(f"Duckエラー: {e}")
+        await interaction.followup.send("🦆 アヒルが転びました。")
+
+@bot.tree.command(name="trivia", description="誰の役にも立たない「世界の無駄知識」を披露します")
+async def trivia(interaction: discord.Interaction):
+    await interaction.response.defer()
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 1. まず英語の無駄知識を取得する
+            async with session.get('https://uselessfacts.jsph.pl/api/v2/facts/random?language=en', timeout=5) as resp:
+                if resp.status == 200:
+                    fact_data = await resp.json()
+                    english_fact = fact_data['text']
+                    
+                    # 2. それをMyMemory APIに投げて日本語に翻訳する（APIの連携技！）
+                    trans_url = f"https://api.mymemory.translated.net/get?q={urllib.parse.quote(english_fact)}&langpair=en|ja"
+                    headers = {"User-Agent": "MyDiscordBot/1.0"}
+                    
+                    async with session.get(trans_url, headers=headers, timeout=5) as trans_resp:
+                        if trans_resp.status == 200:
+                            trans_data = await trans_resp.json()
+                            japanese_fact = trans_data['responseData']['translatedText']
+                            
+                            embed = discord.Embed(title="🧠 今日の無駄知識", description=japanese_fact, color=0xe67e22)
+                            embed.set_footer(text=f"原文: {english_fact}")
+                            
+                            await interaction.followup.send(embed=embed)
+                        else:
+                            await interaction.followup.send("🧠 翻訳に失敗しちゃいました...")
+                else:
+                    await interaction.followup.send("🧠 知識を忘れました...")
+    except Exception as e:
+        print(f"Triviaエラー: {e}")
+        await interaction.followup.send("🧠 脳細胞がショートしました！")
 keep_alive()
 token = os.getenv('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOK
 bot.run(token)
