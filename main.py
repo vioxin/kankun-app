@@ -3,10 +3,11 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import asyncio
+from duckduckgo_search import DDGS  # 追加：検索エンジンを使うためのツール
 import random
 import aiohttp  # APIを叩くためのツール
 from keep_alive import keep_alive
-
+import urllib.parse  # 追加：文字を安全なURLに変換するツール
 # ボットの初期設定
 intents = discord.Intents.default()
 intents.message_content = True
@@ -147,7 +148,86 @@ async def advice(interaction: discord.Interaction):
             advice_text = data['slip']['advice']
             await interaction.followup.send(f"💬 **今日のアドバイス:**\n「{advice_text}」")
 
+# ==========================================
+# 🚀 さらに遊べる追加API機能
+# ==========================================
 
+@bot.tree.command(name="fake", description="この世に存在しない架空の人物プロフィールを生成します")
+async def fake(interaction: discord.Interaction):
+    await interaction.response.defer()
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://randomuser.me/api/') as resp:
+            data = await resp.json()
+            user = data['results'][0]
+            
+            # データをわかりやすく取り出す
+            name = f"{user['name']['first']} {user['name']['last']}"
+            country = user['location']['country']
+            age = user['dob']['age']
+            picture = user['picture']['large']
+
+            # かっこいいプロフィールカード（Embed）を作る
+            embed = discord.Embed(title="🕵️ 架空の人物プロファイル", color=0x2b2d31)
+            embed.add_field(name="名前", value=name, inline=True)
+            embed.add_field(name="国籍", value=country, inline=True)
+            embed.add_field(name="年齢", value=f"{age}歳", inline=True)
+            embed.set_thumbnail(url=picture) # 右上に顔写真をセット
+            
+            await interaction.followup.send(embed=embed)
+
+@bot.tree.command(name="btc", description="現在のビットコイン価格（日本円）を調べます")
+async def btc(interaction: discord.Interaction):
+    await interaction.response.defer()
+    async with aiohttp.ClientSession() as session:
+        async with session.get('https://api.coindesk.com/v1/bpi/currentprice/JPY.json') as resp:
+            data = await resp.json()
+            # 価格データを取り出して、見やすくカンマ区切りにする
+            price = data['bpi']['JPY']['rate']
+            
+            await interaction.followup.send(f"📈 **現在のビットコイン価格:**\n1 BTC = **{price} 円** です！")
+
+@bot.tree.command(name="weather", description="指定した都市の現在の天気を調べます")
+@app_commands.describe(city="都市名（例: Tokyo, Osaka, London）")
+async def weather(interaction: discord.Interaction, city: str):
+    await interaction.response.defer()
+    
+    # wttr.in はURL自体が画像になる特殊な魔法のAPIです
+    image_url = f"https://wttr.in/{city}_0tqp_lang=ja.png"
+    
+    embed = discord.Embed(title=f"🌦️ {city.capitalize()} のお天気", color=0x00ffff)
+    embed.set_image(url=image_url)
+    
+    await interaction.followup.send(embed=embed)
+# ==========================================
+# 🧠 AIチャット機能（登録不要・完全無料！）
+# ==========================================
+
+@bot.tree.command(name="ai", description="AIに質問やお願いをします（例: おすすめのゲーム教えて！）")
+@app_commands.describe(prompt="AIに話しかける内容")
+async def ai_chat(interaction: discord.Interaction, prompt: str):
+    # AIが考えるのには少し時間がかかるので「考え中...」状態にする
+    await interaction.response.defer()
+    
+    # 日本語の質問をURLで使える形に変換する
+    encoded_prompt = urllib.parse.quote(prompt)
+    
+    # Pollinations.ai の無料テキスト生成APIを使用
+    url = f"https://text.pollinations.ai/{encoded_prompt}"
+    
+    async with aiohttp.ClientSession() as session:
+        # APIに質問を投げる
+        async with session.get(url) as resp:
+            if resp.status == 200:
+                answer = await resp.text()
+                
+                # Discordは1回の送信が2000文字までなので、長すぎる場合はカットする対策
+                if len(answer) > 1900:
+                    answer = answer[:1900] + "\n\n(※長すぎるため途中でカットしました！)"
+                
+                # 見栄え良く返信する
+                await interaction.followup.send(f"👤 **あなたの質問:** {prompt}\n\n🤖 **AIの回答:**\n{answer}")
+            else:
+                await interaction.followup.send("ごめんね、今AIがパンクしてて考えられないみたい...時間を置いて試してね！")
 keep_alive()
 token = os.getenv('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOK
 bot.run(token)
