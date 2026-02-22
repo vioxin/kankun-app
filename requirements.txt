@@ -2,3 +2,4 @@ discord.py
 flask
 asyncio
 aiohttp
+duckduckgo-search
