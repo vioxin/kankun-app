@@ -228,6 +228,44 @@ async def ai_chat(interaction: discord.Interaction, prompt: str):
                 await interaction.followup.send(f"👤 **あなたの質問:** {prompt}\n\n🤖 **AIの回答:**\n{answer}")
             else:
                 await interaction.followup.send("ごめんね、今AIがパンクしてて考えられないみたい...時間を置いて試してね！")
+# ==========================================
+# 🔍 インターネット検索機能
+# ==========================================
+
+@bot.tree.command(name="search", description="インターネットでキーワード検索をします")
+@app_commands.describe(query="検索したいキーワード")
+async def search(interaction: discord.Interaction, query: str):
+    await interaction.response.defer() # 検索には少し時間がかかるので「考え中...」にする
+    
+    # 検索処理は少し重いので、ボットがフリーズしないように別の裏作業（スレッド）として実行します
+    def do_search(q):
+        with DDGS() as ddgs:
+            # max_results=3 で、上位3件のサイトを取得
+            return list(ddgs.text(q, region='wt-wt', safesearch='moderate', max_results=3))
+
+    try:
+        # 裏作業として検索を実行
+        results = await asyncio.to_thread(do_search, query)
+        
+        if not results:
+            await interaction.followup.send(f"「{query}」に関する情報は見つかりませんでした💦")
+            return
+
+        # 検索結果をかっこいいパネル（Embed）にまとめる
+        embed = discord.Embed(title=f"🔍 「{query}」の検索結果", color=0x3498db)
+        
+        for res in results:
+            # res['title'] がサイト名、res['body'] が説明文、res['href'] がURLです
+            embed.add_field(
+                name=res['title'], 
+                value=f"{res['body']}\n[🔗リンクはこちら]({res['href']})", 
+                inline=False
+            )
+            
+        await interaction.followup.send(embed=embed)
+        
+    except Exception as e:
+        await interaction.followup.send("検索中にエラーが起きちゃいました...もう一度試してね！")
 keep_alive()
 token = os.getenv('DISCORD_TOKEN') # もしくは os.getenv('DISCORD_TOK
 bot.run(token)
