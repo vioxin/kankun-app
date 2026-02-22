@@ -105,14 +105,29 @@ async def ask(interaction: discord.Interaction, question: str):
             embed.set_image(url=image_url)
             await interaction.followup.send(embed=embed)
 
-@bot.tree.command(name="dog", description="可愛い柴犬の画像を召喚します")
+@bot.tree.command(name="dog", description="可愛い犬の画像を召喚します")
 async def dog(interaction: discord.Interaction):
-    await interaction.response.defer()
-    async with aiohttp.ClientSession() as session:
-        async with session.get('http://shibe.online/api/shibes?count=1') as resp:
-            data = await resp.json()
-            image_url = data[0]
-            await interaction.followup.send(content="🐶 わん！", file=None, embed=discord.Embed().set_image(url=image_url))
+    await interaction.response.defer() # 考え中...にする
+    
+    try:
+        async with aiohttp.ClientSession() as session:
+            # 安定している Dog API に変更！
+            async with session.get('https://dog.ceo/api/breeds/image/random') as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # Dog API は 'message' の中に画像のURLが入っています
+                    image_url = data['message'] 
+                    
+                    embed = discord.Embed(color=0xe67e22)
+                    embed.set_image(url=image_url)
+                    await interaction.followup.send(content="🐶 わん！", embed=embed)
+                else:
+                    await interaction.followup.send("🐶 今みんなお散歩中で、画像が見つからなかったよ...")
+                    
+    except Exception as e:
+        # 万が一エラーが起きてもフリーズさせないためのお守り
+        print(f"Dogエラー: {e}")
+        await interaction.followup.send("🐶 画像を引っ張ってくる途中で転んじゃった！もう一度試してね。")
 
 @bot.tree.command(name="cat", description="可愛いネコちゃんの画像を召喚します")
 async def cat(interaction: discord.Interaction):
@@ -142,11 +157,19 @@ async def poke(interaction: discord.Interaction):
 @bot.tree.command(name="advice", description="ランダムなありがたい言葉（英語）を授けます")
 async def advice(interaction: discord.Interaction):
     await interaction.response.defer()
-    async with aiohttp.ClientSession() as session:
-        async with session.get('https://api.adviceslip.com/advice') as resp:
-            data = await resp.json()
-            advice_text = data['slip']['advice']
-            await interaction.followup.send(f"💬 **今日のアドバイス:**\n「{advice_text}」")
+    try:
+        async with aiohttp.ClientSession() as session:
+            # timeout=5 を追加
+            async with session.get('https://api.adviceslip.com/advice', timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    advice_text = data['slip']['advice']
+                    await interaction.followup.send(f"💬 **今日のアドバイス:**\n「{advice_text}」")
+                else:
+                    await interaction.followup.send("💬 賢者がお留守のようです...")
+    except Exception as e:
+        print(f"Adviceエラー: {e}")
+        await interaction.followup.send("💬 言葉を思い出すのに失敗しました！もう一度試してね。")
 
 # ==========================================
 # 🚀 さらに遊べる追加API機能
@@ -178,13 +201,22 @@ async def fake(interaction: discord.Interaction):
 @bot.tree.command(name="btc", description="現在のビットコイン価格（日本円）を調べます")
 async def btc(interaction: discord.Interaction):
     await interaction.response.defer()
-    async with aiohttp.ClientSession() as session:
-        async with session.get('https://api.coindesk.com/v1/bpi/currentprice/JPY.json') as resp:
-            data = await resp.json()
-            # 価格データを取り出して、見やすくカンマ区切りにする
-            price = data['bpi']['JPY']['rate']
-            
-            await interaction.followup.send(f"📈 **現在のビットコイン価格:**\n1 BTC = **{price} 円** です！")
+    try:
+        async with aiohttp.ClientSession() as session:
+            # timeout=5 を追加して、5秒返事がなければエラーにする
+            async with session.get('https://api.binance.com/api/v3/ticker/price?symbol=BTCJPY', timeout=5) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    # 小数点以下を切り捨てて見やすくする
+                    price = int(float(data['price']))
+                    # 3桁ごとにカンマを入れる
+                    formatted_price = f"{price:,}"
+                    await interaction.followup.send(f"📈 **現在のビットコイン価格:**\n1 BTC = **{formatted_price} 円** です！")
+                else:
+                    await interaction.followup.send("📈 取引所のデータにアクセスできませんでした💦")
+    except Exception as e:
+        print(f"BTCエラー: {e}")
+        await interaction.followup.send("📈 価格の取得に失敗しました。後でもう一度試してね！")
 
 @bot.tree.command(name="weather", description="指定した都市の現在の天気を調べます")
 @app_commands.describe(city="都市名（例: Tokyo, Osaka, London）")
