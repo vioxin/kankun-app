@@ -58,26 +58,56 @@ def run_flask():
 # 🤖 ボットの基本イベント（ここをごっそり書き換えます！）
 # ==========================================
 
+# ==========================================
+# 🤖 ボットの基本イベント
+# ==========================================
+
 async def send_to_discord(text):
     # Webから送られてきた文字をDiscordに送信する関数
     channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
     if channel:
         await channel.send(f"🌐 **[Webサイトから]:** {text}")
 
+# 💡 追加：メッセージから詳細情報を抜き出す便利関数
+def extract_message_data(message):
+    data = {
+        "author": message.author.display_name,
+        "content": message.content,
+        "is_bot": message.author.bot,
+        "interaction": None,
+        "embeds": []
+    }
+    
+    # コマンド実行者の情報を取得
+    if message.interaction:
+        data["interaction"] = {
+            "user": message.interaction.user.display_name, # 実行した人
+            "name": message.interaction.name               # コマンド名 (例: duck)
+        }
+        
+    # 埋め込み(Embed)の情報を取得
+    for embed in message.embeds:
+        embed_info = {}
+        if embed.title:
+            embed_info["title"] = embed.title
+        if embed.description:
+            embed_info["description"] = embed.description
+        if embed.image and embed.image.url:
+            embed_info["image"] = embed.image.url
+        data["embeds"].append(embed_info)
+        
+    return data
+
 @bot.event
 async def on_message(message):
-    # ⚠️ 指定したチャンネルの発言なら、ボット（アプリ）の発言も含めてすべて履歴に保存！
     if message.channel.id == WEB_TARGET_CHANNEL_ID:
-        chat_history.append({
-            "author": message.author.display_name,
-            "content": message.content
-        })
+        # 便利関数を使って詳細データを保存
+        msg_data = extract_message_data(message)
+        chat_history.append(msg_data)
         
-        # 履歴が50件を超えたら古いものから消す
         if len(chat_history) > 50:
             chat_history.pop(0)
 
-    # ボット自身の発言には「!コマンド」などが反応しないようにする（無限ループ防止）
     if message.author.bot:
         return
 
@@ -92,23 +122,20 @@ async def on_ready():
     except Exception as e:
         print(f"同期エラー: {e}")
         
-    # --- 💡 ここから追加：起動時に過去のメッセージを読み込む ---
     channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
     if channel:
         global chat_history
-        chat_history.clear() # 一旦履歴を空っぽにする
+        chat_history.clear() 
         
-        # 過去50件のメッセージを取得
         messages = [msg async for msg in channel.history(limit=50)]
-        messages.reverse() # 古い順（上から下）に並べ替える
+        messages.reverse() 
         
         for msg in messages:
-            chat_history.append({
-                "author": msg.author.display_name,
-                "content": msg.content
-            })
+            # 起動時の履歴読み込みでも便利関数を使う
+            msg_data = extract_message_data(msg)
+            chat_history.append(msg_data)
+            
         print("過去のメッセージの読み込みが完了しました！")
-    # --- ここまで ---
 # ==========================================
 # 💰 お金・ゲーム機能
 # ==========================================
