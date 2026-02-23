@@ -10,10 +10,12 @@ import urllib.parse  # 文字を安全なURLに変換するツール
 from flask import Flask, request, jsonify # 追加：Webサーバー機能
 from flask_cors import CORS # 追加：Webサイトとの通信許可ツール
 from threading import Thread # 追加：ボットとWebサーバーを同時に動かすツール
+import io
 
 # ボットの初期設定
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # 🌐 Web連携の設定
@@ -24,26 +26,49 @@ user_coins = {}   # みんなのお財布
 # ==========================================
 # 🌐 Webサーバー（Flask）の設定
 # ==========================================
+# ==========================================
+# 🌐 Webサーバー（Flask）の設定
+# ==========================================
 app = Flask(__name__)
-CORS(app) # GitHub Pagesからのアクセスを許可
+CORS(app) 
 
 @app.route('/')
 def home():
-    # keep_alive の代わり（Renderで24時間稼働させるためのダミーページ）
     return "Bot is running!"
 
 @app.route('/api/messages', methods=['GET'])
 def get_messages():
-    # HTMLから「最近のメッセージちょうだい！」と言われた時
     return jsonify(chat_history)
 
+# 🌟追加：Discordサーバーの「メンバー一覧」をWebに教える窓口
+@app.route('/api/members', methods=['GET'])
+def get_members():
+    channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
+    if not channel:
+        return jsonify([])
+    members = []
+    # サーバー内の全員をチェックしてリストにする
+    for member in channel.guild.members:
+        if not member.bot: # ボット自身は除外する
+            members.append({"id": str(member.id), "name": member.display_name})
+    return jsonify(members)
+
+# 🌟変更：テキストだけでなく「画像」と「メンション先」も受け取れるようにする
 @app.route('/api/send', methods=['POST'])
 def send_message():
-    # HTMLから「このメッセージ送って！」と言われた時
-    data = request.json
-    text = data.get('text', '')
-    if text:
-        asyncio.run_coroutine_threadsafe(send_to_discord(text), bot.loop)
+    text = request.form.get('text', '')
+    mention_id = request.form.get('mention_id', '')
+    
+    # 画像ファイルの処理
+    image_file = None
+    if 'image' in request.files:
+        file = request.files['image']
+        if file.filename != '':
+            image_bytes = file.read() # 画像を読み込む
+            image_file = {'filename': file.filename, 'data': image_bytes}
+            
+    if text or image_file:
+        asyncio.run_coroutine_threadsafe(send_to_discord(text, mention_id, image_file), bot.loop)
         return jsonify({"status": "success"})
     return jsonify({"status": "error"}), 400
 
@@ -54,19 +79,24 @@ def run_flask():
 # 🤖 ボットの基本イベント
 # ==========================================
 
-# ==========================================
-# 🤖 ボットの基本イベント（ここをごっそり書き換えます！）
-# ==========================================
-
-# ==========================================
-# 🤖 ボットの基本イベント
-# ==========================================
-
-async def send_to_discord(text):
-    # Webから送られてきた文字をDiscordに送信する関数
+# 🌟変更：画像とメンションをDiscordに送信する処理
+async def send_to_discord(text, mention_id=None, image_file=None):
     channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
     if channel:
-        await channel.send(f"🌐 **[Webサイトから]:** {text}")
+        content = ""
+        if text:
+            content += f"🌐 **[Webから]:** {text}"
+            
+        # メンションがあれば追加（Discordの仕様: <@ユーザーID> でメンションになる）
+        if mention_id:
+            content += f" <@{mention_id}>"
+            
+        # 画像があれば追加
+        discord_file = discord.utils.MISSING
+        if image_file:
+            discord_file = discord.File(fp=io.BytesIO(image_file['data']), filename=image_file['filename'])
+            
+        await channel.send(content=content, file=discord_file)
 
 # 💡 追加：メッセージから詳細情報を抜き出す便利関数
 def extract_message_data(message):
