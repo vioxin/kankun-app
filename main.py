@@ -3,7 +3,7 @@ from discord.ext import commands
 from discord import app_commands
 import os
 import asyncio
-from duckduckgo_search import DDGS  # 検索エンジンを使うためのツール
+from duckduckgo_search import DDGS
 import random
 import aiohttp  # APIを叩くためのツール
 import urllib.parse  # 文字を安全なURLに変換するツール
