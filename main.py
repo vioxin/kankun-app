@@ -79,55 +79,83 @@ def run_flask():
 # 🤖 ボットの基本イベント
 # ==========================================
 
-# 🌟変更：画像とメンションをDiscordに送信する処理
-async def send_to_discord(text, mention_id=None, image_file=None):
-    channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
-    if channel:
-        content = ""
-        if text:
-            content += f"🌐 **[Webから]:** {text}"
-            
-        # メンションがあれば追加（Discordの仕様: <@ユーザーID> でメンションになる）
-        if mention_id:
-            content += f" <@{mention_id}>"
-            
-        # 画像があれば追加
-        discord_file = discord.utils.MISSING
-        if image_file:
-            discord_file = discord.File(fp=io.BytesIO(image_file['data']), filename=image_file['filename'])
-            
-        await channel.send(content=content, file=discord_file)
-
-# 💡 追加：メッセージから詳細情報を抜き出す便利関数
+# ==========================================
+# 🌟 メッセージデータの抽出（ファイル対応版）
+# ==========================================
 def extract_message_data(message):
     data = {
         "author": message.author.display_name,
         "content": message.content,
         "is_bot": message.author.bot,
         "interaction": None,
-        "embeds": []
+        "embeds": [],
+        "attachments": [] # 🌟 追加：ファイルを入れる箱
     }
     
-    # コマンド実行者の情報を取得
     if message.interaction:
         data["interaction"] = {
-            "user": message.interaction.user.display_name, # 実行した人
-            "name": message.interaction.name               # コマンド名 (例: duck)
+            "user": message.interaction.user.display_name,
+            "name": message.interaction.name
         }
         
-    # 埋め込み(Embed)の情報を取得
     for embed in message.embeds:
         embed_info = {}
-        if embed.title:
-            embed_info["title"] = embed.title
-        if embed.description:
-            embed_info["description"] = embed.description
-        if embed.image and embed.image.url:
-            embed_info["image"] = embed.image.url
+        if embed.title: embed_info["title"] = embed.title
+        if embed.description: embed_info["description"] = embed.description
+        if embed.image and embed.image.url: embed_info["image"] = embed.image.url
         data["embeds"].append(embed_info)
+        
+    # 🌟 追加：添付ファイル（画像・その他のファイル）の情報を取得
+    for attachment in message.attachments:
+        att_info = {
+            "url": attachment.url,
+            "filename": attachment.filename,
+            "content_type": attachment.content_type or "unknown" # これで画像かそれ以外かを見分けます
+        }
+        data["attachments"].append(att_info)
         
     return data
 
+# ==========================================
+# 🌟 Discordへの送信（Webからのコマンド対応版）
+# ==========================================
+async def send_to_discord(text, mention_id=None, image_file=None):
+    channel = bot.get_channel(WEB_TARGET_CHANNEL_ID)
+    if not channel:
+        return
+
+    # 🌟 追加：Webから特定のコマンド文字が送られたときの裏技処理
+    if text == "/duck":
+        async with aiohttp.ClientSession() as session:
+            async with session.get('https://random-d.uk/api/v2/random') as resp:
+                data = await resp.json()
+                embed = discord.Embed(title="🦆 クワッ！ (Webからの召喚)", color=0xf1c40f)
+                embed.set_image(url=data['url'])
+                await channel.send(embed=embed)
+        return # コマンドとして処理したので、ただの文字としては送らずに終了する
+
+    if text == "/dog":
+        async with aiohttp.ClientSession() as session:
+            async with session.get('https://dog.ceo/api/breeds/image/random') as resp:
+                data = await resp.json()
+                embed = discord.Embed(color=0xe67e22)
+                embed.set_image(url=data['message'])
+                await channel.send(content="🐶 わん！ (Webからの召喚)", embed=embed)
+        return
+
+    # --- 以下は今までの通常の送信処理 ---
+    content = ""
+    if text:
+        content += f"🌐 **[Webから]:** {text}"
+        
+    if mention_id:
+        content += f" <@{mention_id}>"
+        
+    discord_file = discord.utils.MISSING
+    if image_file:
+        discord_file = discord.File(fp=io.BytesIO(image_file['data']), filename=image_file['filename'])
+        
+    await channel.send(content=content, file=discord_file)
 @bot.event
 async def on_message(message):
     if message.channel.id == WEB_TARGET_CHANNEL_ID:
