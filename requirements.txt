@@ -4,4 +4,3 @@ asyncio
 aiohttp
 duckduckgo-search
 flask-cors
-io
