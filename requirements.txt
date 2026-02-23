@@ -3,4 +3,3 @@ flask
 asyncio
 aiohttp
 duckduckgo-search
-yfinance
