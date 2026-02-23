@@ -44,7 +44,7 @@ def get_messages():
 def serve_quiz():
     try:
         # 同じフォルダにある quiz.html を読み込んでWebブラウザ（Discord）に渡す
-        with open('quiz.html', 'r', encoding='utf-8') as f:
+        with open('quize.html', 'r', encoding='utf-8') as f:
             return f.read()
     except FileNotFoundError:
         return "ゲームのファイルが見つかりません！quiz.htmlを同じフォルダに置いてください。"
