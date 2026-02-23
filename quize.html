@@ -127,52 +127,30 @@
 
         // 💡 外部APIからクイズを取得し、さらに「翻訳」する処理！
         async function fetchQuizData() {
-            questionText.innerHTML = "クイズを英語から日本語に翻訳中...<br><span style='font-size: 0.7em;'>(数秒かかります)</span>";
+            // 💡 外部APIではなく、自分のPythonサーバーから完成したクイズをもらう処理！
+        async function fetchQuizData() {
+            // Pythonが裏で5問分の翻訳を頑張るので、少し長めに待たせます
+            questionText.innerHTML = "Pythonがサーバーの裏側で問題を翻訳中...🐍<br><span style='font-size: 0.7em;'>(約5〜10秒ほどかかります。少々お待ちを！)</span>";
             choicesContainer.innerHTML = ""; 
             
             try {
-                // 1. Open Trivia DBから英語のクイズを5問取得
-                const response = await fetch('https://opentdb.com/api.php?amount=5&type=multiple');
-                const data = await response.json();
+                // 🌟 ここが超重要！自分のPythonサーバーの窓口にリクエストする
+                const response = await fetch('/api/quiz');
+                quizData = await response.json();
                 
-                // 文字化けを直す関数
-                const decodeHTML = (html) => {
-                    const txt = document.createElement('textarea');
-                    txt.innerHTML = html;
-                    return txt.value;
-                };
-
-                // 2. 取得した全データ（問題文と選択肢）を【一気に同時翻訳】する
-                quizData = await Promise.all(data.results.map(async (item) => {
-                    // 問題文と正解を翻訳
-                    const questionJa = await translateText(decodeHTML(item.question));
-                    const correctAnswerJa = await translateText(decodeHTML(item.correct_answer));
-                    
-                    // 3つの不正解の選択肢も同時に翻訳
-                    const incorrectAnswersJa = await Promise.all(
-                        item.incorrect_answers.map(ans => translateText(decodeHTML(ans)))
-                    );
-                    
-                    // 選択肢をまとめてシャッフルする準備
-                    const choices = [...incorrectAnswersJa];
-                    const correctIndex = Math.floor(Math.random() * 4);
-                    choices.splice(correctIndex, 0, correctAnswerJa);
-                    
-                    return {
-                        question: questionJa,
-                        choices: choices,
-                        correctIndex: correctIndex,
-                        explanation: `ジャンル: ${item.category} <br> 正解は「${correctAnswerJa}」でした！`
-                    };
-                }));
+                // Python側でエラーが起きていないかチェック
+                if (quizData.error) {
+                    throw new Error(quizData.error);
+                }
                 
-                // 翻訳が終わったら最初の問題を表示！
+                // データの準備が完了したら、最初の問題を表示！
                 loadQuestion();
                 
             } catch (error) {
-                console.error("クイズの取得に失敗しました:", error);
-                questionText.textContent = "エラー：問題データを取得・翻訳できませんでした。";
+                console.error("エラー:", error);
+                questionText.textContent = "エラー：Pythonサーバーから問題データを取得できませんでした。";
             }
+        }
         }
 
         function loadQuestion() {
@@ -253,4 +231,5 @@
         fetchQuizData();
     </script>
 </body>
+
 </html>
