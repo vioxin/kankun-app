@@ -68,7 +68,8 @@ def translate_text(text):
         print(f"翻訳エラー: {e}")
         return text # 失敗したら英語のまま返す
 
-@app.route('/api/quiz', strict_slashes=False)
+@app.route('/api/quiz', methods=['GET'], strict_slashes=False)
+@app.route('/quiz/api/quiz', methods=['GET'], strict_slashes=False)
 def get_quiz_data():
     """クイズデータを取得・翻訳してHTML（ゲーム画面）に渡す窓口"""
     try:
