@@ -84,7 +84,7 @@
 <body>
 
     <div id="quiz-container">
-        <h1>🇮🇷 イラン雑学クイズ</h1>
+        <h1>雑学クイズ</h1>
         <div id="quiz-content">
             <p id="question-text">ここに問題が表示されます</p>
             <div id="choices-container">
@@ -126,7 +126,7 @@
         }
 
         // 💡 外部APIからクイズを取得し、さらに「翻訳」する処理！
-        async function fetchQuizData() {
+        
             // 💡 外部APIではなく、自分のPythonサーバーから完成したクイズをもらう処理！
         async function fetchQuizData() {
             // Pythonが裏で5問分の翻訳を頑張るので、少し長めに待たせます
@@ -151,7 +151,7 @@
                 questionText.textContent = "エラー：Pythonサーバーから問題データを取得できませんでした。";
             }
         }
-        }
+        
 
         function loadQuestion() {
             resultArea.style.display = "none";
@@ -233,3 +233,4 @@
 </body>
 
 </html>
+
