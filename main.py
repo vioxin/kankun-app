@@ -48,6 +48,68 @@ def serve_quiz():
             return f.read()
     except FileNotFoundError:
         return "ゲームのファイルが見つかりません！quiz.htmlを同じフォルダに置いてください。"
+# 🌟 ここから追加：Pythonが裏でクイズを取得・翻訳する処理
+import urllib.request
+
+import json
+import html
+
+
+
+def translate_text(text):
+    """Google翻訳の裏APIを使って英語を日本語にする関数"""
+    try:
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ja&dt=t&q={urllib.parse.quote(text)}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return ''.join([item[0] for item in data[0]])
+    except Exception as e:
+        print(f"翻訳エラー: {e}")
+        return text # 失敗したら英語のまま返す
+
+@app.route('/api/quiz', strict_slashes=False)
+def get_quiz_data():
+    """クイズデータを取得・翻訳してHTML（ゲーム画面）に渡す窓口"""
+    try:
+        # 1. 英語のクイズを5問取得
+        quiz_url = 'https://opentdb.com/api.php?amount=5&type=multiple'
+        req = urllib.request.Request(quiz_url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            data = json.loads(response.read().decode('utf-8'))
+        
+        quiz_list = []
+        
+        # 2. 翻訳してゲーム用の形に整える
+        for item in data['results']:
+            # 文字化け(&quot;など)を直す
+            q_text = html.unescape(item['question'])
+            c_text = html.unescape(item['correct_answer'])
+            inc_texts = [html.unescape(ans) for ans in item['incorrect_answers']]
+            
+            # 翻訳を実行！
+            question_ja = translate_text(q_text)
+            correct_ja = translate_text(c_text)
+            incorrect_ja = [translate_text(ans) for ans in inc_texts]
+            
+            # 選択肢をシャッフルして正解を紛れ込ませる
+            choices = incorrect_ja.copy()
+            correct_index = random.randint(0, 3)
+            choices.insert(correct_index, correct_ja)
+            
+            quiz_list.append({
+                "question": question_ja,
+                "choices": choices,
+                "correctIndex": correct_index,
+                "explanation": f"ジャンル: {item['category']} <br> 正解は「{correct_ja}」でした！"
+            })
+        
+        # 用意できたデータをJSON形式でHTMLに返す！
+        return jsonify(quiz_list)
+    except Exception as e:
+        print(f"クイズAPIエラー: {e}")
+        return jsonify({"error": "クイズの準備に失敗しました"}), 500
+# 🌟 ここまで追加
 # 🌟追加：Discordサーバーの「メンバー一覧」をWebに教える窓口
 @app.route('/api/members', methods=['GET'])
 def get_members():
