@@ -40,7 +40,7 @@ def home():
 def get_messages():
     return jsonify(chat_history)
 # 🌟 追加：Discordアクティビティ用のゲーム画面を配信する窓口
-@app.route('/quiz')
+@app.route('/quiz', strict_slashes=False)
 def serve_quiz():
     try:
         # 同じフォルダにある quiz.html を読み込んでWebブラウザ（Discord）に渡す
