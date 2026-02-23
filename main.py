@@ -39,7 +39,15 @@ def home():
 @app.route('/api/messages', methods=['GET'])
 def get_messages():
     return jsonify(chat_history)
-
+# 🌟 追加：Discordアクティビティ用のゲーム画面を配信する窓口
+@app.route('/quiz')
+def serve_quiz():
+    try:
+        # 同じフォルダにある quiz.html を読み込んでWebブラウザ（Discord）に渡す
+        with open('quiz.html', 'r', encoding='utf-8') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "ゲームのファイルが見つかりません！quiz.htmlを同じフォルダに置いてください。"
 # 🌟追加：Discordサーバーの「メンバー一覧」をWebに教える窓口
 @app.route('/api/members', methods=['GET'])
 def get_members():
